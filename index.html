@@ -3,15 +3,18 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Studio — Web Code Compiler</title>
+  <title>Studio — Enterprise Web Compiler</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <!-- JSZip for client-side ZIP generation -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <style>
     :root {
       --bg-primary: #09090b;
       --bg-secondary: #121215;
       --bg-tertiary: #18181b;
+      --bg-canvas: #050507;
       --bg-hover: #27272a;
       --border: #27272a;
       --border-focus: #52525b;
@@ -32,12 +35,13 @@
       --bg-primary: #ffffff;
       --bg-secondary: #f8fafc;
       --bg-tertiary: #f1f5f9;
+      --bg-canvas: #e2e8f0;
       --bg-hover: #e2e8f0;
       --border: #e2e8f0;
       --border-focus: #94a3b8;
       --text-primary: #0f172a;
       --text-secondary: #475569;
-      --text-muted: #94a3b8;
+      --text-muted: #64748b;
       --accent: #0f172a;
       --accent-fg: #ffffff;
     }
@@ -64,15 +68,15 @@
 
     /* Top Header / Toolbar */
     .header {
-      height: 46px;
+      height: 48px;
       background-color: var(--bg-primary);
       border-bottom: 1px solid var(--border);
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 0 12px;
+      padding: 0 14px;
       flex-shrink: 0;
-      z-index: 20;
+      z-index: 30;
     }
 
     .header-left, .header-center, .header-right {
@@ -88,7 +92,7 @@
       font-weight: 600;
       font-size: 13px;
       letter-spacing: -0.02em;
-      padding-right: 8px;
+      padding-right: 6px;
       color: var(--text-primary);
     }
 
@@ -132,6 +136,7 @@
       cursor: pointer;
       transition: all 0.12s ease;
       font-family: var(--font-sans);
+      position: relative;
     }
 
     .tab:hover {
@@ -144,9 +149,18 @@
       box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
     }
 
-    .tab svg {
-      width: 14px;
-      height: 14px;
+    .tab-dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background-color: var(--text-muted);
+      opacity: 0;
+      transition: opacity 0.15s ease;
+    }
+
+    .tab.has-content .tab-dot {
+      opacity: 1;
+      background-color: var(--info);
     }
 
     .lang-indicator {
@@ -175,6 +189,7 @@
       cursor: pointer;
       transition: all 0.12s ease;
       font-family: var(--font-sans);
+      white-space: nowrap;
     }
 
     .btn:hover {
@@ -217,9 +232,9 @@
     }
 
     .btn svg {
-      width: 15px;
-      height: 15px;
-      stroke-width: 1.6;
+      width: 14px;
+      height: 14px;
+      stroke-width: 1.65;
       flex-shrink: 0;
     }
 
@@ -230,7 +245,87 @@
       border-radius: 3px;
       background-color: rgba(128, 128, 128, 0.15);
       color: inherit;
-      opacity: 0.8;
+      opacity: 0.85;
+    }
+
+    /* Export Dropdown */
+    .dropdown-wrapper {
+      position: relative;
+    }
+
+    .dropdown-menu {
+      position: absolute;
+      top: calc(100% + 6px);
+      right: 0;
+      width: 220px;
+      background-color: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 4px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+      display: none;
+      flex-direction: column;
+      gap: 2px;
+      z-index: 100;
+    }
+
+    .dropdown-menu.open {
+      display: flex;
+    }
+
+    .dropdown-header {
+      padding: 6px 10px 4px;
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+    }
+
+    .dropdown-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      width: 100%;
+      padding: 7px 10px;
+      border: none;
+      background: transparent;
+      color: var(--text-primary);
+      font-family: var(--font-sans);
+      font-size: 12px;
+      font-weight: 500;
+      border-radius: 5px;
+      cursor: pointer;
+      text-align: left;
+      transition: background-color 0.12s ease;
+    }
+
+    .dropdown-item:hover {
+      background-color: var(--bg-hover);
+    }
+
+    .dropdown-item-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .dropdown-item svg {
+      width: 14px;
+      height: 14px;
+      color: var(--text-secondary);
+      stroke-width: 1.65;
+    }
+
+    .dropdown-ext {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--text-muted);
+      background-color: var(--bg-primary);
+      padding: 1px 5px;
+      border-radius: 4px;
+      border: 1px solid var(--border);
     }
 
     /* Workspace Split Layout */
@@ -242,7 +337,7 @@
     }
 
     .pane-editor {
-      width: 50%;
+      width: 48%;
       min-width: 240px;
       height: 100%;
       display: flex;
@@ -257,7 +352,7 @@
       height: 100%;
     }
 
-    /* Resizer Bars */
+    /* Main Split Resizer Bars */
     .resizer-h {
       width: 5px;
       background-color: var(--bg-primary);
@@ -291,7 +386,7 @@
     /* Right Output Pane */
     .pane-output {
       flex: 1;
-      min-width: 240px;
+      min-width: 280px;
       height: 100%;
       display: flex;
       flex-direction: column;
@@ -300,7 +395,7 @@
     }
 
     .preview-toolbar {
-      height: 34px;
+      height: 36px;
       background-color: var(--bg-secondary);
       border-bottom: 1px solid var(--border);
       display: flex;
@@ -308,6 +403,13 @@
       justify-content: space-between;
       padding: 0 10px;
       flex-shrink: 0;
+      gap: 8px;
+    }
+
+    .preview-toolbar-left, .preview-toolbar-right {
+      display: flex;
+      align-items: center;
+      gap: 6px;
     }
 
     .url-pill {
@@ -317,68 +419,265 @@
       background-color: var(--bg-primary);
       border: 1px solid var(--border);
       border-radius: 5px;
-      padding: 3px 10px;
+      padding: 3px 9px;
       font-family: var(--font-mono);
       font-size: 11px;
       color: var(--text-muted);
     }
 
     .url-pill svg {
-      width: 12px;
-      height: 12px;
+      width: 11px;
+      height: 11px;
       color: var(--success);
     }
 
-    .viewport-controls {
-      display: flex;
+    .live-badge {
+      display: inline-flex;
       align-items: center;
-      gap: 4px;
+      gap: 5px;
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--success);
+      background-color: rgba(16, 185, 129, 0.1);
+      border: 1px solid rgba(16, 185, 129, 0.25);
+      padding: 2px 7px;
+      border-radius: 99px;
     }
 
+    .live-badge-dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background-color: var(--success);
+    }
+
+    /* DevTools-Style Resizable Preview Stage */
     .preview-stage {
       flex: 1;
       display: flex;
-      align-items: center;
+      align-items: flex-start;
       justify-content: center;
-      background-color: var(--bg-tertiary);
+      background-color: var(--bg-canvas);
+      background-image: radial-gradient(var(--border) 1px, transparent 1px);
+      background-size: 16px 16px;
       overflow: auto;
       position: relative;
+      padding: 16px 24px 24px 16px;
     }
 
-    .iframe-wrapper {
+    .preview-stage.fit-mode {
+      padding: 0;
+      align-items: stretch;
+    }
+
+    .inspect-viewport-box {
+      position: relative;
       width: 100%;
       height: 100%;
       background-color: #ffffff;
-      transition: width 0.2s cubic-bezier(0.16, 1, 0.3, 1), height 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-      position: relative;
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-    }
-
-    .iframe-wrapper.vp-tablet {
-      width: 768px;
-      height: 92%;
-      border-radius: 8px;
       border: 1px solid var(--border);
-      overflow: hidden;
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.28);
+      display: flex;
+      flex-direction: column;
+      min-width: 200px;
+      min-height: 140px;
+      border-radius: 4px;
     }
 
-    .iframe-wrapper.vp-mobile {
-      width: 375px;
-      height: 88%;
-      border-radius: 12px;
-      border: 1px solid var(--border);
-      overflow: hidden;
+    .preview-stage.fit-mode .inspect-viewport-box {
+      width: 100% !important;
+      height: 100% !important;
+      border: none;
+      border-radius: 0;
+      box-shadow: none;
     }
 
-    iframe#preview-frame {
+    .preview-stage.fit-mode .vp-handle-r,
+    .preview-stage.fit-mode .vp-handle-b,
+    .preview-stage.fit-mode .vp-handle-br {
+      display: none;
+    }
+
+    iframe#preview-frame, iframe#fs-preview-frame {
       width: 100%;
       height: 100%;
       border: none;
       display: block;
       background-color: #ffffff;
+      flex: 1;
     }
 
-    /* Overlay to prevent iframe stealing mouse events while dragging splitters */
+    /* DevTools Inspect Resizer Handles */
+    .vp-handle-r {
+      position: absolute;
+      top: 0;
+      right: -14px;
+      width: 14px;
+      height: 100%;
+      cursor: ew-resize;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10;
+    }
+
+    .vp-handle-r::after {
+      content: '';
+      width: 4px;
+      height: 36px;
+      border-radius: 2px;
+      background-color: var(--border-focus);
+      transition: background-color 0.15s ease, height 0.15s ease;
+    }
+
+    .vp-handle-r:hover::after, .vp-handle-r.active::after {
+      background-color: var(--info);
+      height: 52px;
+    }
+
+    .vp-handle-b {
+      position: absolute;
+      bottom: -14px;
+      left: 0;
+      height: 14px;
+      width: 100%;
+      cursor: ns-resize;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10;
+    }
+
+    .vp-handle-b::after {
+      content: '';
+      height: 4px;
+      width: 36px;
+      border-radius: 2px;
+      background-color: var(--border-focus);
+      transition: background-color 0.15s ease, width 0.15s ease;
+    }
+
+    .vp-handle-b:hover::after, .vp-handle-b.active::after {
+      background-color: var(--info);
+      width: 52px;
+    }
+
+    .vp-handle-br {
+      position: absolute;
+      bottom: -14px;
+      right: -14px;
+      width: 16px;
+      height: 16px;
+      cursor: nwse-resize;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 12;
+      color: var(--text-muted);
+    }
+
+    .vp-handle-br:hover, .vp-handle-br.active {
+      color: var(--info);
+    }
+
+    /* Dimension Input Pill in Preview Toolbar */
+    .dim-controls {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      background-color: var(--bg-primary);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      padding: 2px 6px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-secondary);
+    }
+
+    .dim-input {
+      width: 44px;
+      background: transparent;
+      border: none;
+      color: var(--text-primary);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      text-align: center;
+      outline: none;
+      padding: 1px 0;
+      border-radius: 3px;
+    }
+
+    .dim-input:focus {
+      background-color: var(--bg-tertiary);
+    }
+
+    /* Fullscreen Preview Overlay */
+    .fullscreen-overlay {
+      position: fixed;
+      inset: 0;
+      background-color: #ffffff;
+      z-index: 2000;
+      display: none;
+      flex-direction: column;
+    }
+
+    .fullscreen-overlay.active {
+      display: flex;
+    }
+
+    .fullscreen-bar {
+      position: fixed;
+      top: 12px;
+      right: 16px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background-color: rgba(9, 9, 11, 0.85);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      padding: 5px 8px 5px 12px;
+      border-radius: 999px;
+      box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+      z-index: 2010;
+      color: #fafafa;
+      font-size: 11px;
+      font-family: var(--font-mono);
+      opacity: 0.35;
+      transition: opacity 0.2s ease;
+    }
+
+    .fullscreen-bar:hover {
+      opacity: 1;
+    }
+
+    .fs-exit-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      background-color: rgba(255, 255, 255, 0.12);
+      color: #ffffff;
+      border: none;
+      border-radius: 999px;
+      padding: 4px 10px;
+      font-size: 11px;
+      font-weight: 500;
+      font-family: var(--font-sans);
+      cursor: pointer;
+      transition: background-color 0.15s ease;
+    }
+
+    .fs-exit-btn:hover {
+      background-color: rgba(239, 68, 68, 0.85);
+    }
+
+    .fs-exit-btn svg {
+      width: 13px;
+      height: 13px;
+    }
+
+    /* Drag Shield to prevent iframe stealing mouse events */
     .drag-shield {
       position: fixed;
       inset: 0;
@@ -388,7 +687,7 @@
 
     /* Console Drawer */
     .console-container {
-      height: 185px;
+      height: 165px;
       min-height: 32px;
       background-color: var(--bg-primary);
       display: flex;
@@ -457,7 +756,7 @@
       display: flex;
       align-items: flex-start;
       gap: 8px;
-      padding: 5px 12px;
+      padding: 4px 12px;
       border-bottom: 1px solid rgba(128, 128, 128, 0.08);
       line-height: 1.45;
       word-break: break-word;
@@ -480,14 +779,10 @@
       color: var(--text-primary);
     }
 
-    .log-row.warn {
-      background-color: rgba(245, 158, 11, 0.07);
-    }
+    .log-row.warn { background-color: rgba(245, 158, 11, 0.07); }
     .log-row.warn .log-content { color: var(--warning); }
 
-    .log-row.error {
-      background-color: rgba(239, 68, 68, 0.08);
-    }
+    .log-row.error { background-color: rgba(239, 68, 68, 0.08); }
     .log-row.error .log-content { color: var(--danger); }
 
     .log-row.info .log-content { color: var(--info); }
@@ -557,12 +852,12 @@
       border-radius: 6px;
       font-size: 12px;
       font-weight: 500;
-      box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
       transform: translateY(12px);
       opacity: 0;
       pointer-events: none;
       transition: all 0.2s ease;
-      z-index: 1000;
+      z-index: 3000;
     }
 
     .toast.visible {
@@ -573,8 +868,30 @@
 </head>
 <body>
 
-  <!-- Drag Shield for smooth Split Resizing -->
+  <!-- Hidden File Input for Local Multi-File Import -->
+  <input type="file" id="file-upload-input" accept=".html,.htm,.css,.js" multiple style="display: none;" />
+
+  <!-- Drag Shield for Split & Viewport Resizing -->
   <div class="drag-shield" id="drag-shield"></div>
+
+  <!-- Fullscreen Preview Overlay -->
+  <div class="fullscreen-overlay" id="fullscreen-overlay">
+    <div class="fullscreen-bar">
+      <span class="brand-dot"></span>
+      <span>Live Fullscreen Preview</span>
+      <span id="fs-dimensions" style="opacity: 0.7;"></span>
+      <button class="fs-exit-btn" onclick="toggleFullscreenPreview(false)" title="Exit Fullscreen (Esc)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M8 3v3a2 2 0 0 1-2 2H3"></path>
+          <path d="M21 8h-3a2 2 0 0 1-2-2V3"></path>
+          <path d="M3 16h3a2 2 0 0 1 2 2v3"></path>
+          <path d="M16 21v-3a2 2 0 0 1 2-2h3"></path>
+        </svg>
+        <span>Exit Fullscreen</span>
+      </button>
+    </div>
+    <iframe id="fs-preview-frame" sandbox="allow-scripts allow-modals allow-forms allow-popups"></iframe>
+  </div>
 
   <!-- Header -->
   <header class="header">
@@ -587,17 +904,20 @@
 
       <!-- Language File Tabs -->
       <div class="tabs" role="tablist">
-        <button class="tab active" data-lang="html" onclick="switchTab('html')">
+        <button class="tab active" id="tab-html" data-lang="html" onclick="switchTab('html')">
           <span class="lang-indicator lang-html"></span>
-          index.html
+          <span>index.html</span>
+          <span class="tab-dot" title="Contains code"></span>
         </button>
-        <button class="tab" data-lang="css" onclick="switchTab('css')">
+        <button class="tab" id="tab-css" data-lang="css" onclick="switchTab('css')">
           <span class="lang-indicator lang-css"></span>
-          styles.css
+          <span>styles.css</span>
+          <span class="tab-dot" title="Contains code"></span>
         </button>
-        <button class="tab" data-lang="javascript" onclick="switchTab('javascript')">
+        <button class="tab" id="tab-javascript" data-lang="javascript" onclick="switchTab('javascript')">
           <span class="lang-indicator lang-js"></span>
-          app.js
+          <span>app.js</span>
+          <span class="tab-dot" title="Contains code"></span>
         </button>
       </div>
     </div>
@@ -612,14 +932,14 @@
         <span class="kbd">⌘↵</span>
       </button>
 
-      <button class="btn active-toggle" id="btn-autorun" onclick="toggleAutoRun()" title="Toggle Live Auto-Run">
+      <button class="btn active-toggle" id="btn-autorun" onclick="toggleAutoRun()" title="Toggle Live Hot-Reload">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
           <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path>
         </svg>
-        <span>Auto</span>
+        <span>Hot Reload</span>
       </button>
 
-      <button class="btn" onclick="formatActiveCode()" title="Format Code (Shift + Alt + F)">
+      <button class="btn" onclick="formatActiveCode()" title="Format Code">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
           <line x1="21" x2="3" y1="6" y2="6"></line>
           <line x1="15" x2="3" y1="12" y2="12"></line>
@@ -629,26 +949,46 @@
       </button>
     </div>
 
-    <!-- Right Utilities -->
+    <!-- Right Utilities: Import, Smart Export, Clear, Theme -->
     <div class="header-right">
-      <button class="btn" onclick="resetTemplate()" title="Reset to Default Starter">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
-          <path d="M3 3v5h5"></path>
-        </svg>
-      </button>
-
-      <button class="btn btn-outline" onclick="exportSingleHTML()" title="Download bundled HTML file">
+      <!-- Upload / Import Local Files (.html, .css, .js) -->
+      <button class="btn btn-outline" onclick="triggerFileUpload()" title="Import local .html, .css, or .js files">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
           <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-          <polyline points="7 10 12 15 17 10"></polyline>
-          <line x1="12" x2="12" y1="15" y2="3"></line>
+          <polyline points="17 8 12 3 7 8"></polyline>
+          <line x1="12" x2="12" y1="3" y2="15"></line>
         </svg>
-        <span>Export</span>
+        <span>Import</span>
       </button>
 
+      <!-- Smart Conditional Export Dropdown -->
+      <div class="dropdown-wrapper" id="export-dropdown-wrapper">
+        <button class="btn btn-outline" onclick="handleExportButtonClick(event)" title="Export Written Code">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" x2="12" y1="15" y2="3"></line>
+          </svg>
+          <span>Export</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;opacity:0.7;">
+            <polyline points="6 9 12 15 18 9"></polyline>
+          </svg>
+        </button>
+        <div class="dropdown-menu" id="export-menu"></div>
+      </div>
+
+      <!-- Clear All Workspace -->
+      <button class="btn btn-icon" onclick="clearAllWorkspace()" title="Clear All Editors">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 6h18"></path>
+          <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
+          <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+        </svg>
+      </button>
+
+      <!-- Theme Switcher -->
       <button class="btn btn-icon" id="btn-theme" onclick="toggleTheme()" title="Switch Theme">
-        <svg id="icon-theme" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="12" cy="12" r="4"></circle>
           <path d="M12 2v2"></path><path d="M12 20v2"></path>
           <path d="m4.93 4.93 1.41 1.41"></path><path d="m17.66 17.66 1.41 1.41"></path>
@@ -666,66 +1006,79 @@
       <div id="monaco-root"></div>
     </section>
 
-    <!-- Horizontal Drag Handle -->
+    <!-- Horizontal Split Drag Handle -->
     <div class="resizer-h" id="resizer-h"></div>
 
     <!-- Right Preview & Console Pane -->
     <section class="pane-output" id="pane-output">
       <!-- Preview Sub-Toolbar -->
       <div class="preview-toolbar">
-        <div class="url-pill">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect>
-            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-          </svg>
-          <span>sandbox://live-preview</span>
-          <span id="viewport-dimensions" style="margin-left: 6px; opacity: 0.7;"></span>
+        <div class="preview-toolbar-left">
+          <div class="url-pill">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+            </svg>
+            <span>live-preview</span>
+          </div>
+
+          <div class="live-badge" id="live-status-badge">
+            <span class="live-badge-dot"></span>
+            <span>Live</span>
+          </div>
         </div>
 
-        <div class="viewport-controls">
-          <button class="btn btn-icon active-toggle" id="vp-desktop" onclick="setViewport('desktop')" title="Responsive Desktop">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
-              <rect width="20" height="14" x="2" y="3" rx="2"></rect>
-              <line x1="8" x2="16" y1="21" y2="21"></line>
-              <line x1="12" x2="12" y1="17" y2="21"></line>
-            </svg>
+        <!-- Inspect-Style Resizable Dimensions & Fullscreen Controls -->
+        <div class="preview-toolbar-right">
+          <div class="dim-controls" title="Viewport Width × Height (Drag handles on preview or type to resize)">
+            <input type="number" id="vp-width-input" class="dim-input" value="800" min="200" max="3840" />
+            <span>×</span>
+            <input type="number" id="vp-height-input" class="dim-input" value="600" min="140" max="2160" />
+            <span style="opacity:0.6;padding-right:2px;">px</span>
+          </div>
+
+          <button class="btn active-toggle" id="btn-fit-vp" onclick="resetViewportToFit()" title="Fit Preview to Available Panel Space" style="height:26px;padding:0 8px;font-size:11px;">
+            <span>Fit</span>
           </button>
-          <button class="btn btn-icon" id="vp-tablet" onclick="setViewport('tablet')" title="Tablet (768px)">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
-              <rect width="16" height="20" x="4" y="2" rx="2" ry="2"></rect>
-              <line x1="12" x2="12.01" y1="18" y2="18"></line>
-            </svg>
-          </button>
-          <button class="btn btn-icon" id="vp-mobile" onclick="setViewport('mobile')" title="Mobile (375px)">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
-              <rect width="12" height="20" x="6" y="2" rx="2" ry="2"></rect>
-              <line x1="12" x2="12.01" y1="18" y2="18"></line>
-            </svg>
-          </button>
+
           <div class="divider-v"></div>
-          <button class="btn btn-icon" onclick="openStandaloneWindow()" title="Open Preview in New Tab">
+
+          <button class="btn btn-icon" onclick="toggleFullscreenPreview(true)" title="Full Screen Preview" style="height:26px;width:26px;">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
               <polyline points="15 3 21 3 21 9"></polyline>
-              <line x1="10" x2="21" y1="14" y2="3"></line>
+              <polyline points="9 21 3 21 3 15"></polyline>
+              <line x1="21" x2="14" y1="3" y2="10"></line>
+              <line x1="3" x2="10" y1="21" y2="14"></line>
             </svg>
           </button>
         </div>
       </div>
 
-      <!-- Sandboxed Output Stage -->
-      <div class="preview-stage">
-        <div class="iframe-wrapper" id="iframe-wrapper">
+      <!-- DevTools Inspect-Style Resizable Output Stage -->
+      <div class="preview-stage fit-mode" id="preview-stage">
+        <div class="inspect-viewport-box" id="inspect-viewport-box">
           <iframe id="preview-frame" sandbox="allow-scripts allow-modals allow-forms allow-popups"></iframe>
+
+          <!-- Right Edge Drag Handle -->
+          <div class="vp-handle-r" id="vp-handle-r" title="Drag to resize width"></div>
+          <!-- Bottom Edge Drag Handle -->
+          <div class="vp-handle-b" id="vp-handle-b" title="Drag to resize height"></div>
+          <!-- Bottom-Right Corner Drag Handle -->
+          <div class="vp-handle-br" id="vp-handle-br" title="Drag to resize both">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+              <line x1="21" y1="15" x2="15" y2="21"></line>
+              <line x1="21" y1="8" x2="8" y2="21"></line>
+            </svg>
+          </div>
         </div>
       </div>
 
-      <!-- Vertical Drag Handle -->
+      <!-- Vertical Split Drag Handle -->
       <div class="resizer-v" id="resizer-v"></div>
 
       <!-- Integrated Console -->
       <div class="console-container" id="console-container">
-        <div class="console-header" onclick="toggleConsoleCollapse(event)">
+        <div class="console-header" onclick="toggleConsoleCollapse()">
           <div class="console-title">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
               <polyline points="4 17 10 11 4 5"></polyline>
@@ -741,7 +1094,7 @@
                 <line x1="4.93" x2="19.07" y1="4.93" y2="19.07"></line>
               </svg>
             </button>
-            <button class="btn btn-icon" id="btn-console-chevron" title="Toggle Console" style="height:24px; width:24px;">
+            <button class="btn btn-icon" title="Toggle Console" style="height:24px; width:24px;">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
                 <polyline points="6 9 12 15 18 9"></polyline>
               </svg>
@@ -773,11 +1126,12 @@
       <div class="status-item">
         <span>Ready</span>
       </div>
-      <div class="status-item" id="status-CompileTime">
-        <span>Compiled in 0ms</span>
+      <div class="status-item" id="status-compile-time">
+        <span>Hot Reload Active</span>
       </div>
     </div>
     <div class="status-group">
+      <div class="status-item" id="status-files-count">0 active files</div>
       <div class="status-item" id="status-cursor">Ln 1, Col 1</div>
       <div class="status-item" id="status-lang">HTML</div>
       <div class="status-item">UTF-8</div>
@@ -787,193 +1141,39 @@
   <!-- Toast -->
   <div class="toast" id="toast"></div>
 
-  <!-- Monaco Loader from CDN -->
+  <!-- Monaco Loader from CDN with CORS-safe Blob Worker -->
   <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs/loader.js"></script>
   <script>
-    const STORAGE_KEY = 'studio_compiler_state_v1';
+    const STORAGE_KEY = 'studio_enterprise_compiler_v2';
 
-    const DEFAULT_CODE = {
-      html: `<div class="card">
-  <div class="status-pill">
-    <span class="pulse"></span>
-    System Operational
-  </div>
-  <h1>Minimal Enterprise Sandbox</h1>
-  <p>Edit HTML, CSS, or JavaScript on the left to inspect real-time DOM updates and runtime telemetry.</p>
-  
-  <div class="metrics">
-    <div class="metric-box">
-      <span class="label">Latency</span>
-      <span class="value" id="latency-val">14ms</span>
-    </div>
-    <div class="metric-box">
-      <span class="label">Events</span>
-      <span class="value" id="counter-val">0</span>
-    </div>
-  </div>
-
-  <div class="actions">
-    <button id="ping-btn" class="primary-btn">Dispatch Event</button>
-    <button id="warn-btn" class="secondary-btn">Test Warning</button>
-  </div>
-</div>`,
-      css: `* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
-
-body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  background-color: #f8fafc;
-  color: #0f172a;
-  min-height: 100vh;
-  display: grid;
-  place-items: center;
-  padding: 24px;
-}
-
-.card {
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  padding: 32px;
-  max-width: 440px;
-  width: 100%;
-  box-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.05);
-}
-
-.status-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 12px;
-  font-weight: 500;
-  color: #059669;
-  background: #ecfdf5;
-  border: 1px solid #a7f3d0;
-  padding: 4px 10px;
-  border-radius: 999px;
-  margin-bottom: 16px;
-}
-
-.pulse {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #10b981;
-}
-
-h1 {
-  font-size: 20px;
-  font-weight: 600;
-  letter-spacing: -0.02em;
-  margin-bottom: 8px;
-}
-
-p {
-  font-size: 14px;
-  line-height: 1.6;
-  color: #64748b;
-  margin-bottom: 24px;
-}
-
-.metrics {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  margin-bottom: 24px;
-}
-
-.metric-box {
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  padding: 12px 16px;
-  border-radius: 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.metric-box .label {
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: #64748b;
-}
-
-.metric-box .value {
-  font-size: 18px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
-
-.actions {
-  display: flex;
-  gap: 10px;
-}
-
-button {
-  flex: 1;
-  padding: 10px 16px;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.primary-btn {
-  background: #0f172a;
-  color: #ffffff;
-  border: 1px solid #0f172a;
-}
-
-.primary-btn:hover {
-  background: #1e293b;
-}
-
-.secondary-btn {
-  background: #ffffff;
-  color: #334155;
-  border: 1px solid #cbd5e1;
-}
-
-.secondary-btn:hover {
-  background: #f1f5f9;
-}`,
-      javascript: `let count = 0;
-const counterEl = document.getElementById('counter-val');
-const latencyEl = document.getElementById('latency-val');
-
-document.getElementById('ping-btn').addEventListener('click', () => {
-  count++;
-  const ms = Math.floor(Math.random() * 12) + 8;
-  counterEl.textContent = count;
-  latencyEl.textContent = ms + 'ms';
-  console.log(\`[Event #\${count}] Dispatched payload in \${ms}ms\`);
-});
-
-document.getElementById('warn-btn').addEventListener('click', () => {
-  console.warn('High memory watermark threshold simulated (82%)');
-});
-
-console.info('Sandbox runtime initialized.');`
+    // Start completely empty by default as requested
+    const EMPTY_CODE = {
+      html: '',
+      css: '',
+      javascript: ''
     };
 
     let state = {
       activeLang: 'html',
       autoRun: true,
       theme: 'dark',
-      code: { ...DEFAULT_CODE }
+      isFitMode: true,
+      isFullscreen: false,
+      code: { ...EMPTY_CODE }
     };
 
-    // Load saved code from localStorage
+    // Load saved code if available
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
-        state.code = { ...DEFAULT_CODE, ...parsed.code };
+        if (parsed.code) {
+          state.code = {
+            html: parsed.code.html || '',
+            css: parsed.code.css || '',
+            javascript: parsed.code.javascript || ''
+          };
+        }
         state.theme = parsed.theme || 'dark';
       }
     } catch (e) {}
@@ -984,23 +1184,24 @@ console.info('Sandbox runtime initialized.');`
     let logCount = 0;
     let errorCount = 0;
 
-    // Apply initial theme
     if (state.theme === 'light') {
       document.documentElement.classList.remove('dark');
       document.documentElement.classList.add('light');
     }
 
-    // Configure Monaco Editor
-    require.config({ paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs' } });
+    // Fix Monaco Web Worker Cross-Origin & "Script error." issue via Blob URL Worker
+    const MONACO_BASE = 'https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min';
+    require.config({ paths: { vs: `${MONACO_BASE}/vs` } });
+
+    const workerBlobCode = `
+      self.MonacoEnvironment = { baseUrl: '${MONACO_BASE}/' };
+      importScripts('${MONACO_BASE}/vs/base/worker/workerMain.js');
+    `;
+    const workerBlobUrl = URL.createObjectURL(new Blob([workerBlobCode], { type: 'application/javascript' }));
 
     window.MonacoEnvironment = {
-      getWorkerUrl: function (workerId, label) {
-        return `data:text/javascript;charset=utf-8,${encodeURIComponent(`
-          self.MonacoEnvironment = {
-            baseUrl: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/'
-          };
-          importScripts('https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs/base/worker/workerMain.js');`
-        )}`;
+      getWorker: function () {
+        return new Worker(workerBlobUrl);
       }
     };
 
@@ -1054,30 +1255,31 @@ console.info('Sandbox runtime initialized.');`
         tabSize: 2
       });
 
-      // Listen for changes across all models
+      // Listen for changes or replacements across all models for instant live hot-reload
       Object.keys(models).forEach((lang) => {
         models[lang].onDidChangeContent(() => {
           state.code[lang] = models[lang].getValue();
+          updateTabContentIndicators();
           persistState();
           if (state.autoRun) {
             clearTimeout(debounceTimer);
-            debounceTimer = setTimeout(() => compileCode(false), 380);
+            debounceTimer = setTimeout(() => compileCode(false), 180);
           }
         });
       });
 
-      // Cursor status bar telemetry
       editor.onDidChangeCursorPosition((e) => {
         document.getElementById('status-cursor').textContent =
           `Ln ${e.position.lineNumber}, Col ${e.position.column}`;
       });
 
-      // Keybinding: Cmd/Ctrl + Enter to Run
       editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => {
         compileCode(true);
       });
 
+      updateTabContentIndicators();
       compileCode(false);
+      syncDimensionInputsToBox();
     });
 
     function switchTab(lang) {
@@ -1094,10 +1296,37 @@ console.info('Sandbox runtime initialized.');`
       document.getElementById('status-lang').textContent = labelMap[lang];
     }
 
-    function compileCode(manual = false) {
-      const t0 = performance.now();
-      clearConsole();
+    // Track which files have written code
+    function getWrittenFiles() {
+      const files = [];
+      if (state.code.html && state.code.html.trim().length > 0) {
+        files.push({ key: 'html', name: 'index.html', mime: 'text/html', content: state.code.html });
+      }
+      if (state.code.css && state.code.css.trim().length > 0) {
+        files.push({ key: 'css', name: 'styles.css', mime: 'text/css', content: state.code.css });
+      }
+      if (state.code.javascript && state.code.javascript.trim().length > 0) {
+        files.push({ key: 'javascript', name: 'app.js', mime: 'text/javascript', content: state.code.javascript });
+      }
+      return files;
+    }
 
+    function updateTabContentIndicators() {
+      const hasHtml = state.code.html.trim().length > 0;
+      const hasCss = state.code.css.trim().length > 0;
+      const hasJs = state.code.javascript.trim().length > 0;
+
+      document.getElementById('tab-html').classList.toggle('has-content', hasHtml);
+      document.getElementById('tab-css').classList.toggle('has-content', hasCss);
+      document.getElementById('tab-javascript').classList.toggle('has-content', hasJs);
+
+      const count = (hasHtml ? 1 : 0) + (hasCss ? 1 : 0) + (hasJs ? 1 : 0);
+      document.getElementById('status-files-count').textContent =
+        `${count} active ${count === 1 ? 'file' : 'files'}`;
+    }
+
+    // Build and execute live preview document
+    function buildPreviewDocument() {
       const html = state.code.html;
       const css = state.code.css;
       const js = state.code.javascript;
@@ -1129,7 +1358,8 @@ console.info('Sandbox runtime initialized.');`
             console.info = function(...args) { send('info', args); origInfo.apply(console, args); };
 
             window.addEventListener('error', function(e) {
-              send('error', [e.message + ' (Line ' + e.lineno + ')']);
+              if (e.message === 'Script error.' && !e.lineno) return;
+              send('error', [e.message + (e.lineno ? ' (Line ' + e.lineno + ')' : '')]);
             });
 
             window.addEventListener('unhandledrejection', function(e) {
@@ -1139,7 +1369,7 @@ console.info('Sandbox runtime initialized.');`
             window.addEventListener('message', function(e) {
               if (e.data && e.data.type === 'studio-eval') {
                 try {
-                  const res = eval(e.data.expr);
+                  const res = (0, eval)(e.data.expr);
                   console.log('←', res);
                 } catch (err) {
                   console.error(err);
@@ -1150,7 +1380,7 @@ console.info('Sandbox runtime initialized.');`
         <\/script>
       `;
 
-      const documentSource = `<!DOCTYPE html>
+      return `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8" />
@@ -1169,13 +1399,25 @@ console.info('Sandbox runtime initialized.');`
   <\/script>
 </body>
 </html>`;
+    }
 
+    function compileCode(manual = false) {
+      const t0 = performance.now();
+      clearConsole();
+
+      const documentSource = buildPreviewDocument();
       const frame = document.getElementById('preview-frame');
       frame.srcdoc = documentSource;
 
-      const dt = Math.round(performance.now() - t0);
-      document.getElementById('status-CompileTime').textContent = `Compiled in ${dt}ms`;
-      if (manual) showToast('Compiled & Executed');
+      // Also live-update fullscreen preview if open
+      if (state.isFullscreen) {
+        const fsFrame = document.getElementById('fs-preview-frame');
+        fsFrame.srcdoc = documentSource;
+      }
+
+      const dt = Math.max(1, Math.round(performance.now() - t0));
+      document.getElementById('status-compile-time').textContent = `Hot reloaded in ${dt}ms`;
+      if (manual) showToast('Compiled & Live Reloaded');
     }
 
     // Listen for sandbox console logs
@@ -1224,7 +1466,6 @@ console.info('Sandbox runtime initialized.');`
       badge.classList.toggle('has-errors', errorCount > 0);
     }
 
-    // Interactive Console REPL Evaluation
     document.getElementById('console-eval').addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && e.target.value.trim()) {
         const expr = e.target.value;
@@ -1235,41 +1476,392 @@ console.info('Sandbox runtime initialized.');`
       }
     });
 
-    function toggleConsoleCollapse(e) {
-      const box = document.getElementById('console-container');
-      box.classList.toggle('collapsed');
+    function toggleConsoleCollapse() {
+      document.getElementById('console-container').classList.toggle('collapsed');
+      setTimeout(syncDimensionInputsToBox, 50);
     }
 
     function toggleAutoRun() {
       state.autoRun = !state.autoRun;
       document.getElementById('btn-autorun').classList.toggle('active-toggle', state.autoRun);
-      showToast(state.autoRun ? 'Auto-Run Enabled' : 'Auto-Run Disabled');
+      const badge = document.getElementById('live-status-badge');
+      badge.style.opacity = state.autoRun ? '1' : '0.4';
+      showToast(state.autoRun ? 'Hot Reload Enabled' : 'Hot Reload Paused');
     }
 
     function formatActiveCode() {
       if (!editor) return;
       editor.getAction('editor.action.formatDocument').run();
-      showToast('Document Formatted');
+      showToast('Code Formatted');
     }
 
-    function setViewport(mode) {
-      const wrapper = document.getElementById('iframe-wrapper');
-      const dimLabel = document.getElementById('viewport-dimensions');
-      wrapper.className = 'iframe-wrapper';
+    /* ============================================================================
+     * LOCAL FILE UPLOAD / IMPORT (.html, .css, .js routed by extension)
+     * ============================================================================ */
+    function triggerFileUpload() {
+      const input = document.getElementById('file-upload-input');
+      input.value = '';
+      input.click();
+    }
 
-      ['desktop', 'tablet', 'mobile'].forEach((m) => {
-        document.getElementById(`vp-${m}`).classList.toggle('active-toggle', m === mode);
+    document.getElementById('file-upload-input').addEventListener('change', async (e) => {
+      const files = Array.from(e.target.files || []);
+      if (!files.length) return;
+
+      const importedTabs = [];
+
+      for (const file of files) {
+        const name = file.name.toLowerCase();
+        const text = await file.text();
+
+        if (name.endsWith('.html') || name.endsWith('.htm')) {
+          state.code.html = text;
+          if (models.html) models.html.setValue(text);
+          importedTabs.push('html');
+        } else if (name.endsWith('.css')) {
+          state.code.css = text;
+          if (models.css) models.css.setValue(text);
+          importedTabs.push('css');
+        } else if (name.endsWith('.js')) {
+          state.code.javascript = text;
+          if (models.javascript) models.javascript.setValue(text);
+          importedTabs.push('javascript');
+        }
+      }
+
+      if (importedTabs.length > 0) {
+        switchTab(importedTabs[0]);
+        updateTabContentIndicators();
+        persistState();
+        compileCode(false);
+        showToast(`Imported ${importedTabs.length} ${importedTabs.length === 1 ? 'file' : 'files'}`);
+      } else {
+        showToast('Unsupported file type. Select .html, .css, or .js');
+      }
+    });
+
+    /* ============================================================================
+     * SMART CONDITIONAL EXPORT (Single File -> 2 options, Multi File -> ZIP only)
+     * ============================================================================ */
+    function handleExportButtonClick(e) {
+      e.stopPropagation();
+      const menu = document.getElementById('export-menu');
+      const isOpen = menu.classList.contains('open');
+
+      if (isOpen) {
+        menu.classList.remove('open');
+        return;
+      }
+
+      const writtenFiles = getWrittenFiles();
+      if (writtenFiles.length === 0) {
+        showToast('Write some code first before exporting');
+        return;
+      }
+
+      renderExportMenu(writtenFiles);
+      menu.classList.add('open');
+    }
+
+    function renderExportMenu(writtenFiles) {
+      const menu = document.getElementById('export-menu');
+      menu.innerHTML = '';
+
+      if (writtenFiles.length === 1) {
+        const single = writtenFiles[0];
+        menu.innerHTML = `
+          <div class="dropdown-header">Single File Detected</div>
+          <button class="dropdown-item" onclick="downloadSingleWrittenFile()">
+            <span class="dropdown-item-left">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                <polyline points="14 2 14 8 20 8"></polyline>
+              </svg>
+              <span>Download Single File</span>
+            </span>
+            <span class="dropdown-ext">${single.name}</span>
+          </button>
+          <button class="dropdown-item" onclick="exportProjectZip()">
+            <span class="dropdown-item-left">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 8v13H3V8"></path>
+                <path d="M1 3h22v5H1z"></path>
+                <path d="M10 12h4"></path>
+              </svg>
+              <span>Export ZIP</span>
+            </span>
+            <span class="dropdown-ext">.zip</span>
+          </button>
+        `;
+      } else {
+        menu.innerHTML = `
+          <div class="dropdown-header">${writtenFiles.length} Files Detected</div>
+          <button class="dropdown-item" onclick="exportProjectZip()">
+            <span class="dropdown-item-left">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 8v13H3V8"></path>
+                <path d="M1 3h22v5H1z"></path>
+                <path d="M10 12h4"></path>
+              </svg>
+              <span>Export ZIP</span>
+            </span>
+            <span class="dropdown-ext">${writtenFiles.length} files</span>
+          </button>
+        `;
+      }
+    }
+
+    function downloadSingleWrittenFile() {
+      document.getElementById('export-menu').classList.remove('open');
+      const writtenFiles = getWrittenFiles();
+      if (!writtenFiles.length) return;
+
+      const file = writtenFiles[0];
+      const blob = new Blob([file.content], { type: file.mime });
+      triggerBlobDownload(blob, file.name);
+      showToast(`Downloaded ${file.name}`);
+    }
+
+    async function exportProjectZip() {
+      document.getElementById('export-menu').classList.remove('open');
+      const writtenFiles = getWrittenFiles();
+      if (!writtenFiles.length) return;
+
+      if (typeof JSZip === 'undefined') {
+        showToast('ZIP library still loading, please try again');
+        return;
+      }
+
+      const zip = new JSZip();
+
+      writtenFiles.forEach((f) => {
+        if (f.key === 'html') {
+          // Automatically link styles.css and app.js if they were also written and not already linked
+          let htmlContent = f.content;
+          const hasCss = writtenFiles.some((w) => w.key === 'css');
+          const hasJs = writtenFiles.some((w) => w.key === 'javascript');
+
+          if (hasCss && !htmlContent.includes('styles.css')) {
+            if (htmlContent.includes('</head>')) {
+              htmlContent = htmlContent.replace('</head>', '  <link rel="stylesheet" href="styles.css">\n</head>');
+            } else {
+              htmlContent = `<link rel="stylesheet" href="styles.css">\n` + htmlContent;
+            }
+          }
+          if (hasJs && !htmlContent.includes('app.js')) {
+            if (htmlContent.includes('</body>')) {
+              htmlContent = htmlContent.replace('</body>', '  <script src="app.js"><\/script>\n</body>');
+            } else {
+              htmlContent = htmlContent + `\n<script src="app.js"><\/script>`;
+            }
+          }
+          zip.file('index.html', htmlContent);
+        } else {
+          zip.file(f.name, f.content);
+        }
       });
 
-      if (mode === 'tablet') {
-        wrapper.classList.add('vp-tablet');
-        dimLabel.textContent = '768px';
-      } else if (mode === 'mobile') {
-        wrapper.classList.add('vp-mobile');
-        dimLabel.textContent = '375px';
+      const blob = await zip.generateAsync({ type: 'blob' });
+      triggerBlobDownload(blob, 'studio-project.zip');
+      showToast('Exported studio-project.zip');
+    }
+
+    function triggerBlobDownload(blob, filename) {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    window.addEventListener('click', () => {
+      const menu = document.getElementById('export-menu');
+      if (menu) menu.classList.remove('open');
+    });
+
+    /* ============================================================================
+     * FULLSCREEN PREVIEW MODE
+     * ============================================================================ */
+    function toggleFullscreenPreview(enable) {
+      const overlay = document.getElementById('fullscreen-overlay');
+      const fsFrame = document.getElementById('fs-preview-frame');
+      state.isFullscreen = enable;
+
+      if (enable) {
+        fsFrame.srcdoc = buildPreviewDocument();
+        overlay.classList.add('active');
+        document.getElementById('fs-dimensions').textContent =
+          `${window.innerWidth} × ${window.innerHeight}px`;
+
+        if (overlay.requestFullscreen) {
+          overlay.requestFullscreen().catch(() => {});
+        }
       } else {
-        dimLabel.textContent = '';
+        overlay.classList.remove('active');
+        if (document.fullscreenElement && document.exitFullscreen) {
+          document.exitFullscreen().catch(() => {});
+        }
       }
+    }
+
+    document.addEventListener('fullscreenchange', () => {
+      if (!document.fullscreenElement && state.isFullscreen) {
+        document.getElementById('fullscreen-overlay').classList.remove('active');
+        state.isFullscreen = false;
+      }
+    });
+
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && state.isFullscreen) {
+        toggleFullscreenPreview(false);
+      }
+    });
+
+    window.addEventListener('resize', () => {
+      if (state.isFullscreen) {
+        document.getElementById('fs-dimensions').textContent =
+          `${window.innerWidth} × ${window.innerHeight}px`;
+      }
+      if (state.isFitMode) {
+        syncDimensionInputsToBox();
+      }
+    });
+
+    /* ============================================================================
+     * DEVTOOLS INSPECT-STYLE RESIZABLE PREVIEW VIEWPORT
+     * ============================================================================ */
+    const stageEl = document.getElementById('preview-stage');
+    const vpBoxEl = document.getElementById('inspect-viewport-box');
+    const widthInputEl = document.getElementById('vp-width-input');
+    const heightInputEl = document.getElementById('vp-height-input');
+    const fitBtnEl = document.getElementById('btn-fit-vp');
+
+    function syncDimensionInputsToBox() {
+      const rect = vpBoxEl.getBoundingClientRect();
+      if (rect.width > 0 && rect.height > 0) {
+        widthInputEl.value = Math.round(rect.width);
+        heightInputEl.value = Math.round(rect.height);
+      }
+    }
+
+    function setCustomViewportSize(w, h) {
+      if (state.isFitMode) {
+        state.isFitMode = false;
+        stageEl.classList.remove('fit-mode');
+        fitBtnEl.classList.remove('active-toggle');
+      }
+      const clampedW = Math.max(200, Math.round(w));
+      const clampedH = Math.max(140, Math.round(h));
+      vpBoxEl.style.width = `${clampedW}px`;
+      vpBoxEl.style.height = `${clampedH}px`;
+      widthInputEl.value = clampedW;
+      heightInputEl.value = clampedH;
+    }
+
+    function resetViewportToFit() {
+      state.isFitMode = true;
+      stageEl.classList.add('fit-mode');
+      fitBtnEl.classList.add('active-toggle');
+      vpBoxEl.style.width = '100%';
+      vpBoxEl.style.height = '100%';
+      setTimeout(syncDimensionInputsToBox, 20);
+    }
+
+    // Switch from Fit mode to interactive Inspect Resizable mode when user clicks stage or inputs
+    widthInputEl.addEventListener('change', () => {
+      setCustomViewportSize(Number(widthInputEl.value) || 800, Number(heightInputEl.value) || 600);
+    });
+    heightInputEl.addEventListener('change', () => {
+      setCustomViewportSize(Number(widthInputEl.value) || 800, Number(heightInputEl.value) || 600);
+    });
+
+    // Enable Inspect Handles anytime user hovers near edges or drags
+    (function initInspectViewportResizer() {
+      const handleR = document.getElementById('vp-handle-r');
+      const handleB = document.getElementById('vp-handle-b');
+      const handleBR = document.getElementById('vp-handle-br');
+      const shield = document.getElementById('drag-shield');
+
+      let mode = null; // 'r' | 'b' | 'br'
+      let startX = 0;
+      let startY = 0;
+      let startW = 0;
+      let startH = 0;
+
+      function startInspectDrag(e, dir) {
+        e.preventDefault();
+        e.stopPropagation();
+        const rect = vpBoxEl.getBoundingClientRect();
+        startW = rect.width;
+        startH = rect.height;
+        startX = e.clientX;
+        startY = e.clientY;
+        mode = dir;
+
+        if (state.isFitMode) {
+          setCustomViewportSize(startW - 32, startH - 32);
+          startW = vpBoxEl.getBoundingClientRect().width;
+          startH = vpBoxEl.getBoundingClientRect().height;
+        }
+
+        shield.style.display = 'block';
+        shield.style.cursor = dir === 'r' ? 'ew-resize' : dir === 'b' ? 'ns-resize' : 'nwse-resize';
+
+        if (dir === 'r') handleR.classList.add('active');
+        if (dir === 'b') handleB.classList.add('active');
+        if (dir === 'br') handleBR.classList.add('active');
+      }
+
+      handleR.addEventListener('mousedown', (e) => startInspectDrag(e, 'r'));
+      handleB.addEventListener('mousedown', (e) => startInspectDrag(e, 'b'));
+      handleBR.addEventListener('mousedown', (e) => startInspectDrag(e, 'br'));
+
+      window.addEventListener('mousemove', (e) => {
+        if (!mode) return;
+        const dx = (e.clientX - startX) * 2; // *2 because viewport box is centered horizontally
+        const dy = e.clientY - startY;
+
+        const nextW = (mode === 'r' || mode === 'br') ? startW + dx : startW;
+        const nextH = (mode === 'b' || mode === 'br') ? startH + dy : startH;
+        setCustomViewportSize(nextW, nextH);
+      });
+
+      window.addEventListener('mouseup', () => {
+        if (!mode) return;
+        mode = null;
+        shield.style.display = 'none';
+        handleR.classList.remove('active');
+        handleB.classList.remove('active');
+        handleBR.classList.remove('active');
+      });
+    })();
+
+    // Allow toggling between Fit and Inspect Resizable mode by clicking Fit button
+    fitBtnEl.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (state.isFitMode) {
+        const rect = stageEl.getBoundingClientRect();
+        setCustomViewportSize(Math.max(320, rect.width - 56), Math.max(220, rect.height - 56));
+      } else {
+        resetViewportToFit();
+      }
+    });
+
+    /* ============================================================================
+     * WORKSPACE UTILITIES (CLEAR, THEME, PERSISTENCE, SPLITTERS)
+     * ============================================================================ */
+    function clearAllWorkspace() {
+      state.code = { ...EMPTY_CODE };
+      if (models.html) models.html.setValue('');
+      if (models.css) models.css.setValue('');
+      if (models.javascript) models.javascript.setValue('');
+      updateTabContentIndicators();
+      persistState();
+      compileCode(false);
+      showToast('All editors cleared');
     }
 
     function toggleTheme() {
@@ -1280,54 +1872,6 @@ console.info('Sandbox runtime initialized.');`
         monaco.editor.setTheme(state.theme === 'dark' ? 'studio-dark' : 'studio-light');
       }
       persistState();
-    }
-
-    function resetTemplate() {
-      if (!confirm('Reset HTML, CSS, and JS to the starter template?')) return;
-      state.code = { ...DEFAULT_CODE };
-      models.html.setValue(state.code.html);
-      models.css.setValue(state.code.css);
-      models.javascript.setValue(state.code.javascript);
-      compileCode(true);
-      showToast('Workspace Reset');
-    }
-
-    function exportSingleHTML() {
-      const bundle = `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Exported Project</title>
-  <style>
-${state.code.css}
-  </style>
-</head>
-<body>
-${state.code.html}
-  <script>
-${state.code.javascript}
-  <\/script>
-</body>
-</html>`;
-
-      const blob = new Blob([bundle], { type: 'text/html' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'index.html';
-      a.click();
-      URL.revokeObjectURL(url);
-      showToast('Exported index.html');
-    }
-
-    function openStandaloneWindow() {
-      const win = window.open('', '_blank');
-      if (!win) return;
-      const frame = document.getElementById('preview-frame');
-      win.document.open();
-      win.document.write(frame.srcdoc);
-      win.document.close();
     }
 
     function persistState() {
@@ -1344,10 +1888,10 @@ ${state.code.javascript}
       t.textContent = msg;
       t.classList.add('visible');
       clearTimeout(t._timer);
-      t._timer = setTimeout(() => t.classList.remove('visible'), 1800);
+      t._timer = setTimeout(() => t.classList.remove('visible'), 2000);
     }
 
-    // Split Pane Dragging Mechanics
+    // Main Split Pane Dragging Mechanics
     (function initSplitResizers() {
       const resizerH = document.getElementById('resizer-h');
       const resizerV = document.getElementById('resizer-v');
@@ -1378,13 +1922,15 @@ ${state.code.javascript}
       window.addEventListener('mousemove', (e) => {
         if (draggingH) {
           const rect = workspace.getBoundingClientRect();
-          const newWidth = Math.min(Math.max(240, e.clientX - rect.left), rect.width - 240);
+          const newWidth = Math.min(Math.max(240, e.clientX - rect.left), rect.width - 280);
           paneEditor.style.width = `${(newWidth / rect.width) * 100}%`;
+          if (state.isFitMode) syncDimensionInputsToBox();
         }
         if (draggingV) {
           const rect = paneOutput.getBoundingClientRect();
-          const newHeight = Math.min(Math.max(32, rect.bottom - e.clientY), rect.height - 120);
+          const newHeight = Math.min(Math.max(32, rect.bottom - e.clientY), rect.height - 140);
           consoleBox.style.height = `${newHeight}px`;
+          if (state.isFitMode) syncDimensionInputsToBox();
         }
       });
 
