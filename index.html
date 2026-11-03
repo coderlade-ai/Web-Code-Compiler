@@ -890,7 +890,7 @@
         <span>Exit Fullscreen</span>
       </button>
     </div>
-    <iframe id="fs-preview-frame" sandbox="allow-scripts allow-modals allow-forms allow-popups"></iframe>
+    <iframe id="fs-preview-frame" sandbox="allow-scripts allow-same-origin allow-modals allow-forms allow-popups"></iframe>
   </div>
 
   <!-- Header -->
@@ -1057,7 +1057,7 @@
       <!-- DevTools Inspect-Style Resizable Output Stage -->
       <div class="preview-stage fit-mode" id="preview-stage">
         <div class="inspect-viewport-box" id="inspect-viewport-box">
-          <iframe id="preview-frame" sandbox="allow-scripts allow-modals allow-forms allow-popups"></iframe>
+          <iframe id="preview-frame" sandbox="allow-scripts allow-same-origin allow-modals allow-forms allow-popups"></iframe>
 
           <!-- Right Edge Drag Handle -->
           <div class="vp-handle-r" id="vp-handle-r" title="Drag to resize width"></div>
@@ -1181,6 +1181,8 @@
     let editor = null;
     let models = {};
     let debounceTimer = null;
+    let previewBlobUrl = null;
+    let fsPreviewBlobUrl = null;
     let logCount = 0;
     let errorCount = 0;
 
@@ -1325,11 +1327,15 @@
         `${count} active ${count === 1 ? 'file' : 'files'}`;
     }
 
-    // Build and execute live preview document
+    // Safely escape closing tags and handle full HTML documents vs HTML snippets
     function buildPreviewDocument() {
-      const html = state.code.html;
-      const css = state.code.css;
-      const js = state.code.javascript;
+      const rawHtml = state.code.html || '';
+      const rawCss = state.code.css || '';
+      const rawJs = state.code.javascript || '';
+
+      // Prevent "</style>" or "</script>" inside user CSS/JS from breaking the outer HTML parser
+      const safeCss = rawCss.replace(/<\/style/gi, '<\\/style');
+      const safeJs = rawJs.replace(/<\/script/gi, '<\\/script');
 
       const consoleBridgeScript = `
         <script>
@@ -1380,25 +1386,71 @@
         <\/script>
       `;
 
+      const styleBlock = safeCss.trim() ? `<style id="studio-injected-css">\n${safeCss}\n</style>` : '';
+      const scriptBlock = safeJs.trim()
+        ? `<script id="studio-injected-js">\ntry {\n${safeJs}\n} catch (err) {\n  console.error(err);\n}\n<\/script>`
+        : '';
+
+      // Check if the user pasted a complete HTML document (<!DOCTYPE html> or <html>)
+      const isFullHtmlDoc = /<!doctype\s+html/i.test(rawHtml) || /<html[\s>]/i.test(rawHtml);
+
+      if (isFullHtmlDoc) {
+        let doc = rawHtml;
+
+        // Inject console bridge and CSS into <head> (or before <body> / at start of document)
+        const headInjection = `${consoleBridgeScript}\n${styleBlock}`;
+        if (/<\/head>/i.test(doc)) {
+          doc = doc.replace(/<\/head>/i, `${headInjection}\n</head>`);
+        } else if (/<body[\s>]/i.test(doc)) {
+          doc = doc.replace(/<body([\s>])/i, `${headInjection}\n<body$1`);
+        } else {
+          doc = headInjection + '\n' + doc;
+        }
+
+        // Inject user JS before </body> (or at the end of document)
+        if (scriptBlock) {
+          if (/<\/body>/i.test(doc)) {
+            doc = doc.replace(/<\/body>/i, `${scriptBlock}\n</body>`);
+          } else if (/<\/html>/i.test(doc)) {
+            doc = doc.replace(/<\/html>/i, `${scriptBlock}\n</html>`);
+          } else {
+            doc = doc + '\n' + scriptBlock;
+          }
+        }
+
+        return doc;
+      }
+
+      // Standard snippet assembly when user writes body HTML only
       return `<!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <style>${css}</style>
   ${consoleBridgeScript}
+  ${styleBlock}
 </head>
 <body>
-  ${html}
-  <script>
-    try {
-      ${js}
-    } catch (err) {
-      console.error(err);
-    }
-  <\/script>
+  ${rawHtml}
+  ${scriptBlock}
 </body>
 </html>`;
+    }
+
+    function updateIframeWithBlob(iframeEl, htmlContent, isFullscreenFrame = false) {
+      const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
+      const newUrl = URL.createObjectURL(blob);
+
+      if (isFullscreenFrame) {
+        if (fsPreviewBlobUrl) URL.revokeObjectURL(fsPreviewBlobUrl);
+        fsPreviewBlobUrl = newUrl;
+      } else {
+        if (previewBlobUrl) URL.revokeObjectURL(previewBlobUrl);
+        previewBlobUrl = newUrl;
+      }
+
+      iframeEl.removeAttribute('srcdoc');
+      iframeEl.src = newUrl;
     }
 
     function compileCode(manual = false) {
@@ -1407,12 +1459,12 @@
 
       const documentSource = buildPreviewDocument();
       const frame = document.getElementById('preview-frame');
-      frame.srcdoc = documentSource;
+      updateIframeWithBlob(frame, documentSource, false);
 
       // Also live-update fullscreen preview if open
       if (state.isFullscreen) {
         const fsFrame = document.getElementById('fs-preview-frame');
-        fsFrame.srcdoc = documentSource;
+        updateIframeWithBlob(fsFrame, documentSource, true);
       }
 
       const dt = Math.max(1, Math.round(performance.now() - t0));
@@ -1691,7 +1743,7 @@
       state.isFullscreen = enable;
 
       if (enable) {
-        fsFrame.srcdoc = buildPreviewDocument();
+        updateIframeWithBlob(fsFrame, buildPreviewDocument(), true);
         overlay.classList.add('active');
         document.getElementById('fs-dimensions').textContent =
           `${window.innerWidth} × ${window.innerHeight}px`;
